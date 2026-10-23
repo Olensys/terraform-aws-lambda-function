@@ -1,0 +1,10 @@
+name: __NAME__
+cloud: __CLOUD__          # aws | google | common
+tier: capability          # primitive | capability | blueprint
+maturity: experimental    # experimental | stable | deprecated
+description: __DESCRIPTION__
+owners: [platform]
+upstream: null            # e.g. "terraform-aws-modules/s3-bucket/aws 5.17.0"
+pairs_with: null          # e.g. "terraform-google-gcs-bucket"
+registry_name: __NAME__
+deprecated: null          # { removal: YYYY-MM-DD, replacement: <repo> }

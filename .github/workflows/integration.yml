@@ -1,0 +1,15 @@
+# `common` modules (no cloud provider) should delete this workflow.
+name: integration
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch: {}
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  integration:
+    uses: Olensys/terraform-workflows/.github/workflows/module-integration.yml@v1
+    with:
+      cloud: __CLOUD__
+    secrets: inherit
