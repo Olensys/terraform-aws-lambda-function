@@ -1,3 +1,13 @@
+terraform {
+  required_version = ">= 1.5.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 6.0, < 7.0"
+    }
+  }
+}
+
 module "naming" {
   source = "git::https://github.com/Olensys/terraform-null-naming.git?ref=v1.0.0"
 
