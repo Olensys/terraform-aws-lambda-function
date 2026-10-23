@@ -4,7 +4,7 @@ tier: capability          # primitive | capability | blueprint
 maturity: experimental    # experimental | stable | deprecated
 description: Lambda function with scoped IAM, log retention, tracing, optional schedule, event sources and SSM-sourced environment
 owners: [platform]
-upstream: null            # e.g. "terraform-aws-modules/s3-bucket/aws 5.17.0"
-pairs_with: null          # e.g. "terraform-google-gcs-bucket"
+upstream: "terraform-aws-modules/lambda/aws 8.12.0"
+pairs_with: terraform-google-cloud-function
 registry_name: terraform-aws-lambda-function
 deprecated: null          # { removal: YYYY-MM-DD, replacement: <repo> }
