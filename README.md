@@ -8,8 +8,8 @@ Lambda function with scoped IAM, log retention, tracing, optional schedule, even
 - X-Ray tracing is `Active`, with the tracing policy attached.
 - ARM64 (`arm64`) unless `code.type = "image"`, where the image decides.
 - No function URL. Versions are published (`publish = true`).
-- `schedule_expression` creates an EventBridge Scheduler schedule with `flexible_time_window` OFF and a dedicated scheduler role that may only `lambda:InvokeFunction` on this function. Role name is `<name>-scheduler` (name truncated to 53 characters).
-- SQS event source ARNs automatically get `sqs:ReceiveMessage`, `DeleteMessage`, `GetQueueAttributes`, `ChangeMessageVisibility` scoped to that queue ARN.
+- `schedule_expression` creates an EventBridge Scheduler schedule with `flexible_time_window` OFF and a dedicated scheduler role that may only `lambda:InvokeFunction` on this function. Role name is `<name>-scheduler` (name truncated to 54 characters so the role name stays within 64); its trust policy is restricted with `aws:SourceAccount`.
+- Event sources with `type = "sqs"` (the default; also `kinesis`, `dynamodb`, `other`) automatically get `sqs:ReceiveMessage`, `DeleteMessage`, `GetQueueAttributes`, `ChangeMessageVisibility` scoped to that queue ARN. The decision uses `type`, not the ARN value, so it works when the queue is created in the same apply. Non-SQS sources need their read permissions supplied through `policy_json`.
 - `ssm_environment` resolves SSM parameters with decryption at plan time. Resolved values land in the Lambda configuration (encrypted at rest by AWS) and in Terraform state; treat state accordingly.
 - The code input is named `code`, not `source`, because `source` is a reserved Terraform name.
 
@@ -22,7 +22,7 @@ module "this" {
   name    = "example"
   runtime = "python3.12"
   handler = "handler.handler"
-  code    = { type = "zip_dir", path = "src/handler.py" }
+  code    = { type = "zip_dir", path = "${path.module}/src/handler.py" }
   context = {
     organization = "olensys"
     environment  = "dev"
@@ -60,6 +60,7 @@ module "this" {
 | [aws_iam_role.scheduler](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
 | [aws_iam_role_policy.scheduler](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
 | [aws_scheduler_schedule.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/scheduler_schedule) | resource |
+| [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
 | [aws_iam_policy_document.scheduler_assume](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.scheduler_invoke](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_ssm_parameter.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter) | data source |
@@ -73,12 +74,12 @@ module "this" {
 | <a name="input_name"></a> [name](#input\_name) | Resource name. Lowercase letters, digits and hyphens. | `string` | n/a | yes |
 | <a name="input_create"></a> [create](#input\_create) | Whether to create any resources. Set false to create nothing. | `bool` | `true` | no |
 | <a name="input_environment"></a> [environment](#input\_environment) | Plain environment variables. Visible in plans and state; use ssm\_environment for secrets. | `map(string)` | `{}` | no |
-| <a name="input_event_sources"></a> [event\_sources](#input\_event\_sources) | Event source mappings keyed by name. SQS queue ARNs automatically get a scoped receive/delete policy. | <pre>map(object({<br/>    arn             = string<br/>    batch_size      = optional(number, 10)<br/>    max_concurrency = optional(number)<br/>    filter_patterns = optional(list(string))<br/>  }))</pre> | `{}` | no |
-| <a name="input_handler"></a> [handler](#input\_handler) | Function entrypoint, for example handler.handler. Must be null when code.type is image. | `string` | `null` | no |
+| <a name="input_event_sources"></a> [event\_sources](#input\_event\_sources) | Event source mappings keyed by name. type (default sqs) sqs sources automatically get a scoped receive/delete policy; other types need policy\_json. | <pre>map(object({<br/>    arn             = string<br/>    type            = optional(string, "sqs")<br/>    batch_size      = optional(number, 10)<br/>    max_concurrency = optional(number)<br/>    filter_patterns = optional(list(string))<br/>  }))</pre> | `{}` | no |
+| <a name="input_handler"></a> [handler](#input\_handler) | Function entrypoint, for example handler.handler. Must be null when code.type is image (enforced by a precondition on output arn). | `string` | `null` | no |
 | <a name="input_log_retention_days"></a> [log\_retention\_days](#input\_log\_retention\_days) | CloudWatch log retention in days. | `number` | `30` | no |
 | <a name="input_memory_mb"></a> [memory\_mb](#input\_memory\_mb) | Memory size in MB. | `number` | `256` | no |
 | <a name="input_policy_json"></a> [policy\_json](#input\_policy\_json) | Additional IAM policy document (JSON) attached to the execution role. Null for none. | `string` | `null` | no |
-| <a name="input_runtime"></a> [runtime](#input\_runtime) | Lambda runtime identifier, for example python3.12. Must be null when code.type is image. | `string` | `null` | no |
+| <a name="input_runtime"></a> [runtime](#input\_runtime) | Lambda runtime identifier, for example python3.12. Must be null when code.type is image (enforced by a precondition on output arn). | `string` | `null` | no |
 | <a name="input_schedule_expression"></a> [schedule\_expression](#input\_schedule\_expression) | EventBridge Scheduler expression (rate(...), cron(...) or at(...)). Null disables the schedule. | `string` | `null` | no |
 | <a name="input_ssm_environment"></a> [ssm\_environment](#input\_ssm\_environment) | Map of environment variable name to SSM parameter name, resolved with decryption via a data source. Resolved values land in the Lambda configuration (encrypted at rest by AWS) and in state. | `map(string)` | `{}` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Tags merged onto every taggable resource, applied last. | `map(string)` | `{}` | no |
@@ -93,12 +94,14 @@ module "this" {
 | <a name="output_arn"></a> [arn](#output\_arn) | ARN of the function. Null when create is false. |
 | <a name="output_environment_variable_names"></a> [environment\_variable\_names](#output\_environment\_variable\_names) | Names (never values) of the environment variables set on the function. Null when create is false. |
 | <a name="output_event_source_arns"></a> [event\_source\_arns](#output\_event\_source\_arns) | Event source ARNs by key. Null when create is false. |
+| <a name="output_event_source_mapping"></a> [event\_source\_mapping](#output\_event\_source\_mapping) | Exact event source mapping map passed to the upstream module. Null when create is false. |
 | <a name="output_id"></a> [id](#output\_id) | Identifier of the function (its name). Null when create is false. |
 | <a name="output_invoke_arn"></a> [invoke\_arn](#output\_invoke\_arn) | Invoke ARN of the function, for API Gateway and similar integrations. Null when create is false. |
 | <a name="output_log_group_name"></a> [log\_group\_name](#output\_log\_group\_name) | Name of the CloudWatch log group. Null when create is false. |
 | <a name="output_name"></a> [name](#output\_name) | Name of the function. Null when create is false. |
+| <a name="output_policy_statements"></a> [policy\_statements](#output\_policy\_statements) | SQS consumer policy statements passed to the upstream module. Null when create is false. |
 | <a name="output_qualified_arn"></a> [qualified\_arn](#output\_qualified\_arn) | ARN of the published function version. Null when create is false. |
 | <a name="output_role_arn"></a> [role\_arn](#output\_role\_arn) | ARN of the execution role. Null when create is false. |
-| <a name="output_sqs_event_source_arns"></a> [sqs\_event\_source\_arns](#output\_sqs\_event\_source\_arns) | Subset of event source ARNs that receive the scoped SQS consumer policy. Null when create is false. |
 | <a name="output_tags"></a> [tags](#output\_tags) | Tags applied to every taggable resource, with context.extra\_tags merged in. Null when create is false. |
+| <a name="output_tracing_mode"></a> [tracing\_mode](#output\_tracing\_mode) | Tracing mode passed to the upstream module. Null when create is false. |
 <!-- END_TF_DOCS -->

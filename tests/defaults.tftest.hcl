@@ -69,14 +69,15 @@ run "test_create_false_plans_nothing" {
     condition = alltrue([
       output.id == null, output.name == null, output.arn == null, output.invoke_arn == null,
       output.qualified_arn == null, output.role_arn == null, output.log_group_name == null,
-      output.event_source_arns == null, output.sqs_event_source_arns == null,
+      output.event_source_arns == null, output.event_source_mapping == null,
+      output.policy_statements == null, output.tracing_mode == null,
       output.environment_variable_names == null, output.tags == null,
     ])
     error_message = "All outputs must be null when create is false."
   }
 
   assert {
-    condition     = length(aws_scheduler_schedule.this) == 0 && length(aws_iam_role.scheduler) == 0 && length(data.aws_ssm_parameter.this) == 0
+    condition     = length(aws_scheduler_schedule.this) == 0 && length(aws_iam_role.scheduler) == 0 && length(aws_iam_role_policy.scheduler) == 0 && length(data.aws_ssm_parameter.this) == 0
     error_message = "No root resources or data sources may be planned when create is false."
   }
 }
@@ -120,24 +121,33 @@ run "test_sqs_event_source_mapping" {
         filter_patterns = ["{\"body\":{\"kind\":[\"a\"]}}"]
       }
       stream = {
-        arn = "arn:aws:kinesis:eu-west-1:123456789012:stream/s"
+        arn  = "arn:aws:kinesis:eu-west-1:123456789012:stream/s"
+        type = "kinesis"
       }
     }
   }
 
   assert {
-    condition     = output.event_source_arns == { jobs = "arn:aws:sqs:eu-west-1:123456789012:jobs", stream = "arn:aws:kinesis:eu-west-1:123456789012:stream/s" }
-    error_message = "event_source_arns must list every configured source."
+    condition     = output.event_source_mapping["jobs"].scaling_config.maximum_concurrency == 5 && output.event_source_mapping["jobs"].filter_criteria[0].pattern == "{\"body\":{\"kind\":[\"a\"]}}" && output.event_source_mapping["jobs"].batch_size == 10
+    error_message = "Mapping passed upstream must carry scaling_config, a list of filter patterns and the default batch size."
   }
 
   assert {
-    condition     = output.sqs_event_source_arns == { jobs = "arn:aws:sqs:eu-west-1:123456789012:jobs" }
-    error_message = "Only SQS sources receive the scoped consumer policy."
+    condition     = !contains(keys(output.event_source_mapping["stream"]), "scaling_config") && !contains(keys(output.event_source_mapping["stream"]), "filter_criteria")
+    error_message = "Optional keys must be absent when unset."
+  }
+
+  assert {
+    condition     = keys(output.policy_statements) == ["sqs_jobs"] && output.policy_statements["sqs_jobs"].resources == ["arn:aws:sqs:eu-west-1:123456789012:jobs"] && contains(output.policy_statements["sqs_jobs"].actions, "sqs:ReceiveMessage")
+    error_message = "Only the sqs-typed source gets a policy statement, scoped to its queue ARN."
   }
 }
 
 run "test_ssm_environment_resolved" {
   command = plan
+
+  # SMOKE: the merged value map is sensitive and not visible; asserts the data
+  # source read and the resulting variable names only.
 
   variables {
     environment     = { LOG_LEVEL = "info" }
@@ -151,19 +161,18 @@ run "test_ssm_environment_resolved" {
 
   assert {
     condition     = join(",", output.environment_variable_names) == "DB_PASSWORD,LOG_LEVEL"
-    error_message = "Resolved environment variable names must reach the function configuration."
+    error_message = "Environment variable names must be the union of environment and ssm_environment keys."
   }
 }
 
 run "test_tracing_active" {
   command = plan
 
-  # tracing_mode = "Active" is a literal passed to the upstream module and is
-  # not visible to assertions (child module); tests/complete.tftest.hcl applies it.
-  # Here we only assert the module plans cleanly with the opinions hardcoded.
+  # SMOKE: tracing_mode is passed to the child module and its effect is not
+  # visible; asserts the value the module passes and a clean plan.
   assert {
-    condition     = length(output.tags) == 0 && length(data.aws_ssm_parameter.this) == 0
-    error_message = "Function must plan with default opinions."
+    condition     = output.tracing_mode == "Active" && length(output.tags) == 0
+    error_message = "tracing_mode passed upstream must be Active."
   }
 }
 
@@ -184,7 +193,7 @@ run "test_image_rejects_runtime" {
     code = { type = "image", image_uri = "123456789012.dkr.ecr.eu-west-1.amazonaws.com/x:1" }
   }
 
-  expect_failures = [var.code]
+  expect_failures = [output.arn]
 }
 
 run "test_two_instances_distinct_role_names" {
@@ -233,4 +242,25 @@ run "name_validation_rejects_uppercase" {
   }
 
   expect_failures = [var.name]
+}
+
+run "test_tags_contract" {
+  command = plan
+
+  variables {
+    context = {
+      organization = "olensys"
+      environment  = "test"
+      application  = "example"
+      owner        = "platform"
+      cost_center  = "eng"
+      extra_tags   = { Owner = "y", Team = "z" }
+    }
+    tags = { Owner = "x" }
+  }
+
+  assert {
+    condition     = output.tags.Owner == "x" && output.tags.Team == "z"
+    error_message = "var.tags must win over context.extra_tags."
+  }
 }

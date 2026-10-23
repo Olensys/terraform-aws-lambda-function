@@ -11,6 +11,11 @@ output "name" {
 output "arn" {
   description = "ARN of the function. Null when create is false."
   value       = var.create ? module.this.lambda_function_arn : null
+
+  precondition {
+    condition     = var.code.type != "image" || (var.runtime == null && var.handler == null)
+    error_message = "runtime and handler must be null when code.type is image."
+  }
 }
 
 output "invoke_arn" {
@@ -38,9 +43,19 @@ output "event_source_arns" {
   value       = var.create ? { for k, v in var.event_sources : k => v.arn } : null
 }
 
-output "sqs_event_source_arns" {
-  description = "Subset of event source ARNs that receive the scoped SQS consumer policy. Null when create is false."
-  value       = var.create ? local.sqs_event_source_arns : null
+output "event_source_mapping" {
+  description = "Exact event source mapping map passed to the upstream module. Null when create is false."
+  value       = var.create ? local.event_source_mapping : null
+}
+
+output "policy_statements" {
+  description = "SQS consumer policy statements passed to the upstream module. Null when create is false."
+  value       = var.create ? local.policy_statements : null
+}
+
+output "tracing_mode" {
+  description = "Tracing mode passed to the upstream module. Null when create is false."
+  value       = var.create ? local.tracing_mode : null
 }
 
 output "environment_variable_names" {

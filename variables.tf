@@ -31,13 +31,13 @@ variable "create" {
 }
 
 variable "runtime" {
-  description = "Lambda runtime identifier, for example python3.12. Must be null when code.type is image."
+  description = "Lambda runtime identifier, for example python3.12. Must be null when code.type is image (enforced by a precondition on output arn)."
   type        = string
   default     = null
 }
 
 variable "handler" {
-  description = "Function entrypoint, for example handler.handler. Must be null when code.type is image."
+  description = "Function entrypoint, for example handler.handler. Must be null when code.type is image (enforced by a precondition on output arn)."
   type        = string
   default     = null
 }
@@ -54,10 +54,6 @@ variable "code" {
   validation {
     condition     = contains(["zip_dir", "s3", "image"], var.code.type)
     error_message = "code.type must be one of zip_dir, s3, image."
-  }
-  validation {
-    condition     = var.code.type != "image" || (var.runtime == null && var.handler == null)
-    error_message = "runtime and handler must be null when code.type is image."
   }
   validation {
     condition = (
@@ -127,14 +123,19 @@ variable "schedule_expression" {
 }
 
 variable "event_sources" {
-  description = "Event source mappings keyed by name. SQS queue ARNs automatically get a scoped receive/delete policy."
+  description = "Event source mappings keyed by name. type (default sqs) sqs sources automatically get a scoped receive/delete policy; other types need policy_json."
   type = map(object({
     arn             = string
+    type            = optional(string, "sqs")
     batch_size      = optional(number, 10)
     max_concurrency = optional(number)
     filter_patterns = optional(list(string))
   }))
   default = {}
+  validation {
+    condition     = alltrue([for k, v in var.event_sources : contains(["sqs", "kinesis", "dynamodb", "other"], v.type)])
+    error_message = "event_sources[*].type must be one of sqs, kinesis, dynamodb, other."
+  }
 }
 
 variable "policy_json" {

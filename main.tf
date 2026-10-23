@@ -3,11 +3,7 @@ locals {
 
   is_image = var.code.type == "image"
 
-  sqs_event_source_arns = {
-    for k, v in var.event_sources : k => v.arn if startswith(v.arn, "arn:") && length(regexall("^arn:[^:]+:sqs:", v.arn)) > 0
-  }
-
-  scheduler_role_name = "${substr(var.name, 0, 53)}-scheduler"
+  scheduler_role_name = "${substr(var.name, 0, 54)}-scheduler"
 
   # Names only; values never leave the resolved map.
   environment_variable_names = sort(distinct(concat(keys(var.environment), keys(var.ssm_environment))))
@@ -19,17 +15,19 @@ locals {
         batch_size       = v.batch_size
       },
       v.max_concurrency == null ? {} : { scaling_config = { maximum_concurrency = v.max_concurrency } },
-      v.filter_patterns == null ? {} : { filter_criteria = { filter = [for p in v.filter_patterns : { pattern = p }] } },
+      v.filter_patterns == null ? {} : { filter_criteria = [for p in v.filter_patterns : { pattern = p }] },
     )
   }
 
   policy_statements = {
-    for k, arn in local.sqs_event_source_arns : "sqs_${k}" => {
+    for k, v in var.event_sources : "sqs_${k}" => {
       effect    = "Allow"
       actions   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:ChangeMessageVisibility"]
-      resources = [arn]
-    }
+      resources = [v.arn]
+    } if v.type == "sqs"
   }
+
+  tracing_mode = "Active"
 }
 
 # Values are fetched with decryption and end up in the Lambda configuration
@@ -70,7 +68,7 @@ module "this" {
   vpc_security_group_ids = var.vpc == null ? null : var.vpc.security_group_ids
   attach_network_policy  = var.vpc != null
 
-  tracing_mode          = "Active"
+  tracing_mode          = local.tracing_mode
   attach_tracing_policy = true
 
   use_existing_cloudwatch_log_group = false
@@ -89,11 +87,13 @@ module "this" {
   attach_policy_json = var.policy_json != null
   policy_json        = var.policy_json
 
-  attach_policy_statements = length(local.policy_statements) > 0
+  attach_policy_statements = length([for k, v in var.event_sources : k if v.type == "sqs"]) > 0
   policy_statements        = local.policy_statements
 
   tags = local.tags
 }
+
+data "aws_caller_identity" "current" {}
 
 data "aws_iam_policy_document" "scheduler_assume" {
   count = var.create && var.schedule_expression != null ? 1 : 0
@@ -103,6 +103,11 @@ data "aws_iam_policy_document" "scheduler_assume" {
     principals {
       type        = "Service"
       identifiers = ["scheduler.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
     }
   }
 }
