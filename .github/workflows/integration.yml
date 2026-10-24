@@ -6,6 +6,7 @@ on:
     paths:
       - '**/*.tf'
       - '**/*.tftest.hcl'
+      - 'examples/**'
       - '.terraform-version'
       - '.opentofu-version'
       - '.github/workflows/integration.yml'
