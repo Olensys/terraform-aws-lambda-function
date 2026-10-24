@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.3](https://github.com/Olensys/terraform-aws-lambda-function/compare/v1.0.2...v1.0.3) (2026-10-24)
+
+
+### Bug Fixes
+
+* **examples:** unique application slug so concurrent integration runs do not collide ([#3](https://github.com/Olensys/terraform-aws-lambda-function/issues/3)) ([d63530b](https://github.com/Olensys/terraform-aws-lambda-function/commit/d63530b6f769d75ae6ecbbc280dc53bc92c558c2))
+
 ## [1.0.2](https://github.com/Olensys/terraform-aws-lambda-function/compare/v1.0.1...v1.0.2) (2026-10-24)
 
 
