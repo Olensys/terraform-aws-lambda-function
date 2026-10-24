@@ -8,3 +8,4 @@ permissions:
 jobs:
   release:
     uses: Olensys/terraform-workflows/.github/workflows/module-release.yml@v1
+    secrets: inherit
