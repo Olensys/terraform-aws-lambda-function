@@ -1,7 +1,16 @@
+# `common` modules (no cloud provider) should delete this workflow.
 name: integration
 on:
+  push:
+    branches: [main]
+    paths:
+      - '**/*.tf'
+      - '**/*.tftest.hcl'
+      - '.terraform-version'
+      - '.opentofu-version'
+      - '.github/workflows/integration.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '0 3 * * 0'   # weekly drift check, Sunday 03:00 UTC
   workflow_dispatch: {}
 permissions:
   id-token: write
