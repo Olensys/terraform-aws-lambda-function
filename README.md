@@ -16,20 +16,21 @@ Lambda function with scoped IAM, log retention, tracing, optional schedule, even
 ## Usage
 
 ```hcl
-module "this" {
-  source = "git::https://github.com/Olensys/terraform-aws-lambda-function.git?ref=v1.0.0"
+module "naming" {
+  source  = "git::https://github.com/Olensys/terraform-null-naming.git?ref=v1.0.1"
+  context = var.context
+}
 
-  name    = "example"
+module "lambda_function" {
+  source  = "git::https://github.com/Olensys/terraform-aws-lambda-function.git?ref=v1.0.1"
+  name    = module.naming.name
+  context = var.context
+
   runtime = "python3.12"
   handler = "handler.handler"
   code    = { type = "zip_dir", path = "${path.module}/src/handler.py" }
-  context = {
-    organization = "olensys"
-    environment  = "dev"
-    application  = "example"
-    owner        = "platform"
-    cost_center  = "eng"
-  }
+
+  tags = module.naming.tags
 }
 ```
 
