@@ -1,7 +1,7 @@
 name: terraform-aws-lambda-function
 cloud: aws          # aws | google | common
 tier: capability          # primitive | capability | blueprint
-maturity: experimental    # experimental | stable | deprecated
+maturity: stable    # experimental | stable | deprecated
 description: Lambda function with scoped IAM, log retention, tracing, optional schedule, event sources and SSM-sourced environment
 owners: [platform]
 upstream: "terraform-aws-modules/lambda/aws 8.12.0"
