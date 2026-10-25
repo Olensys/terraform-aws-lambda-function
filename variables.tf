@@ -43,7 +43,7 @@ variable "handler" {
 }
 
 variable "code" {
-  description = "Code source. type is zip_dir (path to a directory or file to zip), s3 (s3_bucket and s3_key of an existing package) or image (image_uri of a container image). For s3, track_s3_version reads the object and deploys its current version, so uploading a new zip to the same key updates the function; it needs versioning on the bucket and s3:GetObject and s3:GetObjectVersion for the caller."
+  description = "Code source. type is zip_dir (path to a directory or file to zip), s3 (s3_bucket and s3_key of an existing package) or image (image_uri of a container image). architecture is arm64 or x86_64; null keeps arm64 for zip and lets the image decide for images. For s3, track_s3_version reads the object at plan time and deploys its current version, so the object must already exist when the plan runs (upload it in a separate step), and each new upload makes the next apply update the function and publish a new version. It needs versioning on the bucket and s3:GetObject and s3:GetObjectVersion for the caller."
   type = object({
     type             = string
     path             = optional(string)
@@ -51,10 +51,15 @@ variable "code" {
     s3_key           = optional(string)
     track_s3_version = optional(bool, false)
     image_uri        = optional(string)
+    architecture     = optional(string)
   })
   validation {
     condition     = contains(["zip_dir", "s3", "image"], var.code.type)
     error_message = "code.type must be one of zip_dir, s3, image."
+  }
+  validation {
+    condition     = var.code.architecture == null || contains(["arm64", "x86_64"], coalesce(var.code.architecture, "arm64"))
+    error_message = "code.architecture must be arm64 or x86_64."
   }
   validation {
     condition = (
@@ -64,16 +69,6 @@ variable "code" {
       !contains(["zip_dir", "s3", "image"], var.code.type)
     )
     error_message = "code.path is required for zip_dir, code.s3_bucket and code.s3_key for s3, code.image_uri for image."
-  }
-}
-
-variable "architectures" {
-  description = "Instruction set architectures. Null means [\"arm64\"] for zip functions and the image's own for container images."
-  type        = list(string)
-  default     = null
-  validation {
-    condition     = var.architectures == null ? true : (length(var.architectures) == 1 && contains(["arm64", "x86_64"], var.architectures[0]))
-    error_message = "architectures must be [\"arm64\"] or [\"x86_64\"]."
   }
 }
 
@@ -154,6 +149,10 @@ variable "event_sources" {
   validation {
     condition     = alltrue([for k, v in var.event_sources : contains(["sqs", "kinesis", "dynamodb", "other"], v.type)])
     error_message = "event_sources[*].type must be one of sqs, kinesis, dynamodb, other."
+  }
+  validation {
+    condition     = alltrue([for k, v in var.event_sources : v.type != "sqs" || v.batch_size <= 10 || coalesce(v.maximum_batching_window_s, 0) >= 1])
+    error_message = "SQS event sources with batch_size above 10 need maximum_batching_window_s of at least 1."
   }
   validation {
     condition     = alltrue([for k, v in var.event_sources : v.function_response_types == null ? true : alltrue([for t in v.function_response_types : t == "ReportBatchItemFailures"])])

@@ -224,22 +224,36 @@ run "test_s3_version_not_read_by_default" {
   }
 }
 
-run "test_architectures_validation" {
+run "test_architecture_validation" {
   command = plan
 
   variables {
-    architectures = ["mips"]
+    code = { type = "zip_dir", path = "examples/minimal/src/handler.py", architecture = "mips" }
   }
 
-  expect_failures = [var.architectures]
+  expect_failures = [var.code]
 }
 
-run "test_architectures_and_role_name_accepted" {
+run "test_large_sqs_batch_needs_window" {
   command = plan
 
   variables {
-    architectures = ["x86_64"]
-    role_name     = "example-lambda"
+    event_sources = {
+      jobs = { arn = "arn:aws:sqs:eu-west-1:123456789012:jobs", batch_size = 100 }
+    }
+  }
+
+  expect_failures = [var.event_sources]
+}
+
+run "test_architecture_and_role_name_accepted" {
+  command = plan
+
+  # SMOKE: the mocked upstream hides the role and architecture; this only
+  # proves the inputs plan.
+  variables {
+    code      = { type = "zip_dir", path = "examples/minimal/src/handler.py", architecture = "x86_64" }
+    role_name = "example-lambda"
   }
 
   assert {

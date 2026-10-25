@@ -61,7 +61,7 @@ module "this" {
   role_name     = var.role_name
   handler       = var.handler
   runtime       = var.runtime
-  architectures = var.architectures != null ? var.architectures : (local.is_image ? null : ["arm64"])
+  architectures = var.code.architecture != null ? [var.code.architecture] : (local.is_image ? null : ["arm64"])
   memory_size   = var.memory_mb
   timeout       = var.timeout_s
   publish       = true
