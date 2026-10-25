@@ -19,6 +19,12 @@ mock_provider "aws" {
     }
   }
 
+  mock_data "aws_s3_object" {
+    defaults = {
+      version_id = "v1"
+    }
+  }
+
   mock_data "aws_partition" {
     defaults = {
       partition  = "aws"
@@ -140,6 +146,105 @@ run "test_sqs_event_source_mapping" {
   assert {
     condition     = keys(output.policy_statements) == ["sqs_jobs"] && output.policy_statements["sqs_jobs"].resources == ["arn:aws:sqs:eu-west-1:123456789012:jobs"] && contains(output.policy_statements["sqs_jobs"].actions, "sqs:ReceiveMessage")
     error_message = "Only the sqs-typed source gets a policy statement, scoped to its queue ARN."
+  }
+}
+
+run "test_batch_failure_reporting_and_window" {
+  command = plan
+
+  variables {
+    event_sources = {
+      jobs = {
+        arn                       = "arn:aws:sqs:eu-west-1:123456789012:jobs"
+        maximum_batching_window_s = 5
+        function_response_types   = ["ReportBatchItemFailures"]
+      }
+      plain = {
+        arn = "arn:aws:sqs:eu-west-1:123456789012:plain"
+      }
+    }
+  }
+
+  assert {
+    condition     = output.event_source_mapping["jobs"].maximum_batching_window_in_seconds == 5 && join(",", output.event_source_mapping["jobs"].function_response_types) == "ReportBatchItemFailures"
+    error_message = "Mapping passed upstream must carry the batching window and function response types."
+  }
+
+  assert {
+    condition     = !contains(keys(output.event_source_mapping["plain"]), "maximum_batching_window_in_seconds") && !contains(keys(output.event_source_mapping["plain"]), "function_response_types")
+    error_message = "Both keys must be absent when unset."
+  }
+}
+
+run "test_function_response_types_validation" {
+  command = plan
+
+  variables {
+    event_sources = {
+      jobs = {
+        arn                     = "arn:aws:sqs:eu-west-1:123456789012:jobs"
+        function_response_types = ["Other"]
+      }
+    }
+  }
+
+  expect_failures = [var.event_sources]
+}
+
+run "test_s3_version_tracked_when_enabled" {
+  command = plan
+
+  variables {
+    runtime = "python3.12"
+    handler = "handler.handler"
+    code = {
+      type             = "s3"
+      s3_bucket        = "artifacts"
+      s3_key           = "fn.zip"
+      track_s3_version = true
+    }
+  }
+
+  assert {
+    condition     = length(data.aws_s3_object.package) == 1 && data.aws_s3_object.package[0].bucket == "artifacts" && data.aws_s3_object.package[0].key == "fn.zip"
+    error_message = "The package object must be read when track_s3_version is true."
+  }
+}
+
+run "test_s3_version_not_read_by_default" {
+  command = plan
+
+  variables {
+    code = { type = "s3", s3_bucket = "artifacts", s3_key = "fn.zip" }
+  }
+
+  assert {
+    condition     = length(data.aws_s3_object.package) == 0
+    error_message = "The package object must not be read unless track_s3_version is true."
+  }
+}
+
+run "test_architectures_validation" {
+  command = plan
+
+  variables {
+    architectures = ["mips"]
+  }
+
+  expect_failures = [var.architectures]
+}
+
+run "test_architectures_and_role_name_accepted" {
+  command = plan
+
+  variables {
+    architectures = ["x86_64"]
+    role_name     = "example-lambda"
+  }
+
+  assert {
+    condition     = output.name == "example"
+    error_message = "A custom architecture and role name must plan cleanly."
   }
 }
 

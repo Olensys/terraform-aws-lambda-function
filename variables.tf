@@ -43,13 +43,14 @@ variable "handler" {
 }
 
 variable "code" {
-  description = "Code source. type is zip_dir (path to a directory or file to zip), s3 (s3_bucket and s3_key of an existing package) or image (image_uri of a container image)."
+  description = "Code source. type is zip_dir (path to a directory or file to zip), s3 (s3_bucket and s3_key of an existing package) or image (image_uri of a container image). For s3, track_s3_version reads the object and deploys its current version, so uploading a new zip to the same key updates the function; it needs versioning on the bucket and s3:GetObject and s3:GetObjectVersion for the caller."
   type = object({
-    type      = string
-    path      = optional(string)
-    s3_bucket = optional(string)
-    s3_key    = optional(string)
-    image_uri = optional(string)
+    type             = string
+    path             = optional(string)
+    s3_bucket        = optional(string)
+    s3_key           = optional(string)
+    track_s3_version = optional(bool, false)
+    image_uri        = optional(string)
   })
   validation {
     condition     = contains(["zip_dir", "s3", "image"], var.code.type)
@@ -64,6 +65,22 @@ variable "code" {
     )
     error_message = "code.path is required for zip_dir, code.s3_bucket and code.s3_key for s3, code.image_uri for image."
   }
+}
+
+variable "architectures" {
+  description = "Instruction set architectures. Null means [\"arm64\"] for zip functions and the image's own for container images."
+  type        = list(string)
+  default     = null
+  validation {
+    condition     = var.architectures == null ? true : (length(var.architectures) == 1 && contains(["arm64", "x86_64"], var.architectures[0]))
+    error_message = "architectures must be [\"arm64\"] or [\"x86_64\"]."
+  }
+}
+
+variable "role_name" {
+  description = "Name of the execution role. Null uses the function name. Changing it replaces the role."
+  type        = string
+  default     = null
 }
 
 variable "memory_mb" {
@@ -123,18 +140,24 @@ variable "schedule_expression" {
 }
 
 variable "event_sources" {
-  description = "Event source mappings keyed by name. type (default sqs) sqs sources automatically get a scoped receive/delete policy; other types need policy_json."
+  description = "Event source mappings keyed by name. type (default sqs) sqs sources automatically get a scoped receive/delete policy; other types need policy_json. maximum_batching_window_s waits up to that many seconds to fill a batch; function_response_types may be [\"ReportBatchItemFailures\"] so only failed messages are retried."
   type = map(object({
-    arn             = string
-    type            = optional(string, "sqs")
-    batch_size      = optional(number, 10)
-    max_concurrency = optional(number)
-    filter_patterns = optional(list(string))
+    arn                       = string
+    type                      = optional(string, "sqs")
+    batch_size                = optional(number, 10)
+    max_concurrency           = optional(number)
+    filter_patterns           = optional(list(string))
+    maximum_batching_window_s = optional(number)
+    function_response_types   = optional(list(string))
   }))
   default = {}
   validation {
     condition     = alltrue([for k, v in var.event_sources : contains(["sqs", "kinesis", "dynamodb", "other"], v.type)])
     error_message = "event_sources[*].type must be one of sqs, kinesis, dynamodb, other."
+  }
+  validation {
+    condition     = alltrue([for k, v in var.event_sources : v.function_response_types == null ? true : alltrue([for t in v.function_response_types : t == "ReportBatchItemFailures"])])
+    error_message = "event_sources[*].function_response_types may only contain ReportBatchItemFailures."
   }
 }
 

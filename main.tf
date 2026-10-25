@@ -15,6 +15,8 @@ locals {
         batch_size       = v.batch_size
       },
       v.max_concurrency == null ? {} : { scaling_config = { maximum_concurrency = v.max_concurrency } },
+      v.maximum_batching_window_s == null ? {} : { maximum_batching_window_in_seconds = v.maximum_batching_window_s },
+      v.function_response_types == null ? {} : { function_response_types = v.function_response_types },
       v.filter_patterns == null ? {} : { filter_criteria = [for p in v.filter_patterns : { pattern = p }] },
     )
   }
@@ -28,6 +30,16 @@ locals {
   }
 
   tracing_mode = "Active"
+
+  track_s3_version = var.create && var.code.type == "s3" && var.code.track_s3_version
+}
+
+# Reads the current version of the package so a new upload to the same key updates the function.
+data "aws_s3_object" "package" {
+  count = local.track_s3_version ? 1 : 0
+
+  bucket = var.code.s3_bucket
+  key    = var.code.s3_key
 }
 
 # Values are fetched with decryption and end up in the Lambda configuration
@@ -46,18 +58,23 @@ module "this" {
   create = var.create
 
   function_name = var.name
+  role_name     = var.role_name
   handler       = var.handler
   runtime       = var.runtime
-  architectures = local.is_image ? null : ["arm64"]
+  architectures = var.architectures != null ? var.architectures : (local.is_image ? null : ["arm64"])
   memory_size   = var.memory_mb
   timeout       = var.timeout_s
   publish       = true
 
-  create_package      = var.code.type == "zip_dir"
-  source_path         = var.code.type == "zip_dir" ? var.code.path : null
-  s3_existing_package = var.code.type == "s3" ? { bucket = var.code.s3_bucket, key = var.code.s3_key } : null
-  package_type        = local.is_image ? "Image" : "Zip"
-  image_uri           = local.is_image ? var.code.image_uri : null
+  create_package = var.code.type == "zip_dir"
+  source_path    = var.code.type == "zip_dir" ? var.code.path : null
+  s3_existing_package = var.code.type == "s3" ? {
+    bucket     = var.code.s3_bucket
+    key        = var.code.s3_key
+    version_id = local.track_s3_version ? data.aws_s3_object.package[0].version_id : null
+  } : null
+  package_type = local.is_image ? "Image" : "Zip"
+  image_uri    = local.is_image ? var.code.image_uri : null
 
   environment_variables = merge(
     var.environment,
