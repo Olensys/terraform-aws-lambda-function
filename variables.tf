@@ -43,17 +43,23 @@ variable "handler" {
 }
 
 variable "code" {
-  description = "Code source. type is zip_dir (path to a directory or file to zip), s3 (s3_bucket and s3_key of an existing package) or image (image_uri of a container image)."
+  description = "Code source. type is zip_dir (path to a directory or file to zip), s3 (s3_bucket and s3_key of an existing package) or image (image_uri of a container image). architecture is arm64 or x86_64; null keeps arm64 for zip and lets the image decide for images. For s3, track_s3_version reads the object at plan time and deploys its current version, so the object must already exist when the plan runs (upload it in a separate step), and each new upload makes the next apply update the function and publish a new version. It needs versioning on the bucket and s3:GetObject and s3:GetObjectVersion for the caller."
   type = object({
-    type      = string
-    path      = optional(string)
-    s3_bucket = optional(string)
-    s3_key    = optional(string)
-    image_uri = optional(string)
+    type             = string
+    path             = optional(string)
+    s3_bucket        = optional(string)
+    s3_key           = optional(string)
+    track_s3_version = optional(bool, false)
+    image_uri        = optional(string)
+    architecture     = optional(string)
   })
   validation {
     condition     = contains(["zip_dir", "s3", "image"], var.code.type)
     error_message = "code.type must be one of zip_dir, s3, image."
+  }
+  validation {
+    condition     = var.code.architecture == null || contains(["arm64", "x86_64"], coalesce(var.code.architecture, "arm64"))
+    error_message = "code.architecture must be arm64 or x86_64."
   }
   validation {
     condition = (
@@ -64,6 +70,12 @@ variable "code" {
     )
     error_message = "code.path is required for zip_dir, code.s3_bucket and code.s3_key for s3, code.image_uri for image."
   }
+}
+
+variable "role_name" {
+  description = "Name of the execution role. Null uses the function name. Changing it replaces the role."
+  type        = string
+  default     = null
 }
 
 variable "memory_mb" {
@@ -123,18 +135,28 @@ variable "schedule_expression" {
 }
 
 variable "event_sources" {
-  description = "Event source mappings keyed by name. type (default sqs) sqs sources automatically get a scoped receive/delete policy; other types need policy_json."
+  description = "Event source mappings keyed by name. type (default sqs) sqs sources automatically get a scoped receive/delete policy; other types need policy_json. maximum_batching_window_s waits up to that many seconds to fill a batch; function_response_types may be [\"ReportBatchItemFailures\"] so only failed messages are retried."
   type = map(object({
-    arn             = string
-    type            = optional(string, "sqs")
-    batch_size      = optional(number, 10)
-    max_concurrency = optional(number)
-    filter_patterns = optional(list(string))
+    arn                       = string
+    type                      = optional(string, "sqs")
+    batch_size                = optional(number, 10)
+    max_concurrency           = optional(number)
+    filter_patterns           = optional(list(string))
+    maximum_batching_window_s = optional(number)
+    function_response_types   = optional(list(string))
   }))
   default = {}
   validation {
     condition     = alltrue([for k, v in var.event_sources : contains(["sqs", "kinesis", "dynamodb", "other"], v.type)])
     error_message = "event_sources[*].type must be one of sqs, kinesis, dynamodb, other."
+  }
+  validation {
+    condition     = alltrue([for k, v in var.event_sources : v.type != "sqs" || v.batch_size <= 10 || coalesce(v.maximum_batching_window_s, 0) >= 1])
+    error_message = "SQS event sources with batch_size above 10 need maximum_batching_window_s of at least 1."
+  }
+  validation {
+    condition     = alltrue([for k, v in var.event_sources : v.function_response_types == null ? true : alltrue([for t in v.function_response_types : t == "ReportBatchItemFailures"])])
+    error_message = "event_sources[*].function_response_types may only contain ReportBatchItemFailures."
   }
 }
 
