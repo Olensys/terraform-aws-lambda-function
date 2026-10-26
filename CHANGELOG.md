@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/Olensys/terraform-aws-lambda-function/compare/v1.0.3...v1.1.0) (2026-10-26)
+
+
+### Features
+
+* add s3 version tracking, batch failure reporting, architectures and role_name ([#6](https://github.com/Olensys/terraform-aws-lambda-function/issues/6)) ([ed066f8](https://github.com/Olensys/terraform-aws-lambda-function/commit/ed066f879a1b7a1eb8f896c15fcf7267620d6951))
+
 ## [1.0.3](https://github.com/Olensys/terraform-aws-lambda-function/compare/v1.0.2...v1.0.3) (2026-10-24)
 
 
