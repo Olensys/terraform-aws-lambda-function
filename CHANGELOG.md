@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/Olensys/terraform-aws-lambda-function/compare/v1.1.0...v1.2.0) (2026-10-27)
+
+
+### Features
+
+* add tracing_mode and description ([#8](https://github.com/Olensys/terraform-aws-lambda-function/issues/8)) ([b7a6f46](https://github.com/Olensys/terraform-aws-lambda-function/commit/b7a6f46410ba813c020f04b4592a1f31ebd2b8c2))
+
 ## [1.1.0](https://github.com/Olensys/terraform-aws-lambda-function/compare/v1.0.3...v1.1.0) (2026-10-26)
 
 
