@@ -5,7 +5,7 @@ Lambda function with scoped IAM, log retention, tracing, optional schedule, even
 ## Opinions
 
 - Log group is created before the function with `log_retention_days` retention (default 30).
-- X-Ray tracing is `Active`, with the tracing policy attached.
+- X-Ray tracing is `Active` with the tracing policy attached, unless `tracing_mode = "PassThrough"`, which turns tracing off and skips the policy.
 - ARM64 (`arm64`) unless `code.architecture` is set, or `code.type = "image"`, where the image decides.
 - No function URL. Versions are published (`publish = true`).
 - `schedule_expression` creates an EventBridge Scheduler schedule with `flexible_time_window` OFF and a dedicated scheduler role that may only `lambda:InvokeFunction` on this function. Role name is `<name>-scheduler` (name truncated to 54 characters so the role name stays within 64); its trust policy is restricted with `aws:SourceAccount`.
@@ -90,6 +90,7 @@ module "lambda_function" {
 | <a name="input_ssm_environment"></a> [ssm\_environment](#input\_ssm\_environment) | Map of environment variable name to SSM parameter name, resolved with decryption via a data source. Resolved values land in the Lambda configuration (encrypted at rest by AWS) and in state. | `map(string)` | `{}` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Tags merged onto every taggable resource, applied last. | `map(string)` | `{}` | no |
 | <a name="input_timeout_s"></a> [timeout\_s](#input\_timeout\_s) | Function timeout in seconds. | `number` | `30` | no |
+| <a name="input_tracing_mode"></a> [tracing\_mode](#input\_tracing\_mode) | X-Ray tracing mode: Active (default; also attaches the X-Ray write policy) or PassThrough (no tracing). | `string` | `"Active"` | no |
 | <a name="input_triggers"></a> [triggers](#input\_triggers) | Resource-based invoke permissions, keyed by statement id: principal (for example events.amazonaws.com) and source\_arn. | <pre>map(object({<br/>    principal  = string<br/>    source_arn = string<br/>  }))</pre> | `{}` | no |
 | <a name="input_vpc"></a> [vpc](#input\_vpc) | Attach the function to a VPC. Null for no VPC attachment. | <pre>object({<br/>    subnet_ids         = list(string)<br/>    security_group_ids = list(string)<br/>  })</pre> | `null` | no |
 

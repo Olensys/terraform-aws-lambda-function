@@ -295,6 +295,29 @@ run "test_tracing_active" {
   }
 }
 
+run "test_tracing_pass_through" {
+  command = plan
+
+  variables {
+    tracing_mode = "PassThrough"
+  }
+
+  assert {
+    condition     = output.tracing_mode == "PassThrough"
+    error_message = "tracing_mode PassThrough must be passed upstream."
+  }
+}
+
+run "test_tracing_mode_validation" {
+  command = plan
+
+  variables {
+    tracing_mode = "Off"
+  }
+
+  expect_failures = [var.tracing_mode]
+}
+
 run "test_source_type_validation" {
   command = plan
 

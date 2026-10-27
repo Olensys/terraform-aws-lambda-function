@@ -55,7 +55,7 @@ output "policy_statements" {
 
 output "tracing_mode" {
   description = "Tracing mode passed to the upstream module. Null when create is false."
-  value       = var.create ? local.tracing_mode : null
+  value       = var.create ? var.tracing_mode : null
 }
 
 output "environment_variable_names" {
