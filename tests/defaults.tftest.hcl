@@ -295,6 +295,20 @@ run "test_tracing_active" {
   }
 }
 
+run "test_description_accepted" {
+  # SMOKE: the description goes to the upstream function and is not visible here; this proves the input plans.
+  command = plan
+
+  variables {
+    description = "Forwards jobs from SQS"
+  }
+
+  assert {
+    condition     = output.name == "example"
+    error_message = "A description must plan cleanly."
+  }
+}
+
 run "test_tracing_pass_through" {
   command = plan
 

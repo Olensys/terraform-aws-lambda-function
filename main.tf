@@ -56,6 +56,7 @@ module "this" {
   create = var.create
 
   function_name = var.name
+  description   = var.description
   role_name     = var.role_name
   handler       = var.handler
   runtime       = var.runtime

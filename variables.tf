@@ -72,6 +72,12 @@ variable "code" {
   }
 }
 
+variable "description" {
+  description = "Description of the function. Null for none."
+  type        = string
+  default     = null
+}
+
 variable "tracing_mode" {
   description = "X-Ray tracing mode: Active (default; also attaches the X-Ray write policy) or PassThrough (no tracing)."
   type        = string
