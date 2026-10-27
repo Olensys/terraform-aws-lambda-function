@@ -72,6 +72,22 @@ variable "code" {
   }
 }
 
+variable "description" {
+  description = "Description of the function. Null for none."
+  type        = string
+  default     = null
+}
+
+variable "tracing_mode" {
+  description = "X-Ray tracing mode: Active (default; also attaches the X-Ray write policy) or PassThrough (no tracing)."
+  type        = string
+  default     = "Active"
+  validation {
+    condition     = contains(["Active", "PassThrough"], var.tracing_mode)
+    error_message = "tracing_mode must be Active or PassThrough."
+  }
+}
+
 variable "role_name" {
   description = "Name of the execution role. Null uses the function name. Changing it replaces the role."
   type        = string

@@ -5,7 +5,7 @@ Lambda function with scoped IAM, log retention, tracing, optional schedule, even
 ## Opinions
 
 - Log group is created before the function with `log_retention_days` retention (default 30).
-- X-Ray tracing is `Active`, with the tracing policy attached.
+- X-Ray tracing is `Active` with the tracing policy attached, unless `tracing_mode = "PassThrough"`, which turns tracing off and skips the policy.
 - ARM64 (`arm64`) unless `code.architecture` is set, or `code.type = "image"`, where the image decides.
 - No function URL. Versions are published (`publish = true`).
 - `schedule_expression` creates an EventBridge Scheduler schedule with `flexible_time_window` OFF and a dedicated scheduler role that may only `lambda:InvokeFunction` on this function. Role name is `<name>-scheduler` (name truncated to 54 characters so the role name stays within 64); its trust policy is restricted with `aws:SourceAccount`.
@@ -78,6 +78,7 @@ module "lambda_function" {
 | <a name="input_context"></a> [context](#input\_context) | Deployment context used for naming, tagging and environment-dependent defaults. | <pre>object({<br/>    organization = string<br/>    environment  = string<br/>    application  = string<br/>    component    = optional(string)<br/>    owner        = string<br/>    cost_center  = string<br/>    extra_tags   = optional(map(string), {})<br/>  })</pre> | n/a | yes |
 | <a name="input_name"></a> [name](#input\_name) | Resource name. Lowercase letters, digits and hyphens. | `string` | n/a | yes |
 | <a name="input_create"></a> [create](#input\_create) | Whether to create any resources. Set false to create nothing. | `bool` | `true` | no |
+| <a name="input_description"></a> [description](#input\_description) | Description of the function. Null for none. | `string` | `null` | no |
 | <a name="input_environment"></a> [environment](#input\_environment) | Plain environment variables. Visible in plans and state; use ssm\_environment for secrets. | `map(string)` | `{}` | no |
 | <a name="input_event_sources"></a> [event\_sources](#input\_event\_sources) | Event source mappings keyed by name. type (default sqs) sqs sources automatically get a scoped receive/delete policy; other types need policy\_json. maximum\_batching\_window\_s waits up to that many seconds to fill a batch; function\_response\_types may be ["ReportBatchItemFailures"] so only failed messages are retried. | <pre>map(object({<br/>    arn                       = string<br/>    type                      = optional(string, "sqs")<br/>    batch_size                = optional(number, 10)<br/>    max_concurrency           = optional(number)<br/>    filter_patterns           = optional(list(string))<br/>    maximum_batching_window_s = optional(number)<br/>    function_response_types   = optional(list(string))<br/>  }))</pre> | `{}` | no |
 | <a name="input_handler"></a> [handler](#input\_handler) | Function entrypoint, for example handler.handler. Must be null when code.type is image (enforced by a precondition on output arn). | `string` | `null` | no |
@@ -90,6 +91,7 @@ module "lambda_function" {
 | <a name="input_ssm_environment"></a> [ssm\_environment](#input\_ssm\_environment) | Map of environment variable name to SSM parameter name, resolved with decryption via a data source. Resolved values land in the Lambda configuration (encrypted at rest by AWS) and in state. | `map(string)` | `{}` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Tags merged onto every taggable resource, applied last. | `map(string)` | `{}` | no |
 | <a name="input_timeout_s"></a> [timeout\_s](#input\_timeout\_s) | Function timeout in seconds. | `number` | `30` | no |
+| <a name="input_tracing_mode"></a> [tracing\_mode](#input\_tracing\_mode) | X-Ray tracing mode: Active (default; also attaches the X-Ray write policy) or PassThrough (no tracing). | `string` | `"Active"` | no |
 | <a name="input_triggers"></a> [triggers](#input\_triggers) | Resource-based invoke permissions, keyed by statement id: principal (for example events.amazonaws.com) and source\_arn. | <pre>map(object({<br/>    principal  = string<br/>    source_arn = string<br/>  }))</pre> | `{}` | no |
 | <a name="input_vpc"></a> [vpc](#input\_vpc) | Attach the function to a VPC. Null for no VPC attachment. | <pre>object({<br/>    subnet_ids         = list(string)<br/>    security_group_ids = list(string)<br/>  })</pre> | `null` | no |
 

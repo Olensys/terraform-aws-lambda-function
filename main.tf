@@ -29,8 +29,6 @@ locals {
     } if v.type == "sqs"
   }
 
-  tracing_mode = "Active"
-
   track_s3_version = var.create && var.code.type == "s3" && var.code.track_s3_version
 }
 
@@ -58,6 +56,7 @@ module "this" {
   create = var.create
 
   function_name = var.name
+  description   = var.description
   role_name     = var.role_name
   handler       = var.handler
   runtime       = var.runtime
@@ -85,8 +84,8 @@ module "this" {
   vpc_security_group_ids = var.vpc == null ? null : var.vpc.security_group_ids
   attach_network_policy  = var.vpc != null
 
-  tracing_mode          = local.tracing_mode
-  attach_tracing_policy = true
+  tracing_mode          = var.tracing_mode
+  attach_tracing_policy = var.tracing_mode == "Active"
 
   use_existing_cloudwatch_log_group = false
   cloudwatch_logs_retention_in_days = var.log_retention_days
